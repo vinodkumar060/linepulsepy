@@ -19,11 +19,36 @@
 
 ---
 
+## 📦 Installation
+
+```bash
+pip install linepulsepy
+```
+---
+
 ## 📸 Screenshots / Example Output
 
+---
 ```text
-🔍 LinePulse Report for sample:
+from linepulsepy import profile_lines
+import time
 
-   10 | 0.000001s | x = 0
-   11 | 0.500234s | for i in range(5):
-   12 | 0.000002s |     x += i
+def call():
+    time.sleep(2)
+
+@profile_lines
+def test_func():
+    x = 0
+    for i in range(5):
+        call()
+        x += i
+        time.sleep(0.2)
+    return x
+
+test_func()
+```
+
+<img width="820" height="144" alt="Screenshot 2026-05-01 at 10 43 49 PM" src="https://github.com/user-attachments/assets/3fbc5c81-e128-4a0a-98df-c8ca0144d6f8" />
+
+
+
