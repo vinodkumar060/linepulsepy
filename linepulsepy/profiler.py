@@ -9,36 +9,76 @@ from .utils import Color
 def profile_lines(func):
     """
     Profile execution time of each line in a function.
+    Handles nested profiled functions correctly.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         timings = {}
         lines, start_line = inspect.getsourcelines(func)
 
+        # Track last executed line + timestamp per frame
+        frame_state = {}
+
         def trace(frame, event, arg):
-            if event != "line":
+            # Only trace THIS function
+            if frame.f_code != func.__code__:
                 return trace
 
-            lineno = frame.f_lineno
-            start = time.perf_counter()
-
-            def local_trace(frame, event, arg):
-                elapsed = time.perf_counter() - start
-                timings[lineno] = timings.get(lineno, 0) + elapsed
+            if event == "call":
+                frame_state[frame] = {
+                    "last_time": time.perf_counter(),
+                    "last_line": frame.f_lineno,
+                }
                 return trace
 
-            return local_trace
+            if event == "line":
+                state = frame_state.get(frame)
+                if state:
+                    now = time.perf_counter()
+                    elapsed = now - state["last_time"]
 
+                    lineno = state["last_line"]
+                    timings[lineno] = timings.get(lineno, 0) + elapsed
+
+                    # update state
+                    state["last_time"] = now
+                    state["last_line"] = frame.f_lineno
+
+                return trace
+
+            if event == "return":
+                state = frame_state.get(frame)
+                if state:
+                    now = time.perf_counter()
+                    elapsed = now - state["last_time"]
+
+                    lineno = state["last_line"]
+                    timings[lineno] = timings.get(lineno, 0) + elapsed
+
+                    del frame_state[frame]
+
+                return trace
+
+            return trace
+
+        # 🔑 Save previous tracer (IMPORTANT for nesting)
+        old_trace = sys.gettrace()
         sys.settrace(trace)
-        result = func(*args, **kwargs)
-        sys.settrace(None)
 
+        try:
+            result = func(*args, **kwargs)
+        finally:
+            sys.settrace(old_trace)
+
+        # 📊 Print report
         print(f"\n{Color.YELLOW}🔍 LinePulse Report for {func.__name__}:{Color.RESET}\n")
+
         for idx, line in enumerate(lines):
             lineno = start_line + idx
             elapsed = timings.get(lineno, 0)
 
-            # decide color based on time
+            # color thresholds
             if elapsed > 0.3:
                 color = Color.RED
             elif elapsed > 0.1:
